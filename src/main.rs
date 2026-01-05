@@ -40,7 +40,7 @@ struct ClickRequest {
     action: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct DailyCountsResponse {
     date: String,
     add_count: u64,
@@ -99,14 +99,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         data: Arc::new(Mutex::new(data)),
     };
 
-    let app = Router::new()
-        .route("/", get(index))
-        .route("/click/add", post(click_add))
-        .route("/click/sub", post(click_sub))
-        .route("/api/today", get(get_today))
-        .route("/api/stats", get(get_stats))
-        .route("/api/click", post(click))
-        .with_state(state);
+    let app = app_router(state);
 
     let port = env::var("PORT")
         .ok()
@@ -126,6 +119,17 @@ async fn index(State(state): State<AppState>) -> Html<String> {
     let data = state.data.lock().await;
     let counts = data.days.get(&date).cloned().unwrap_or_default();
     Html(render_index(&date, &counts))
+}
+
+fn app_router(state: AppState) -> Router {
+    Router::new()
+        .route("/", get(index))
+        .route("/click/add", post(click_add))
+        .route("/click/sub", post(click_sub))
+        .route("/api/today", get(get_today))
+        .route("/api/stats", get(get_stats))
+        .route("/api/click", post(click))
+        .with_state(state)
 }
 
 async fn get_today(State(state): State<AppState>) -> Result<Json<DailyCountsResponse>, AppError> {
@@ -196,8 +200,11 @@ fn today_string() -> String {
 }
 
 fn build_stats(data: &AppData) -> StatsResponse {
+    build_stats_at(Local::now().date_naive(), data)
+}
+
+fn build_stats_at(today: NaiveDate, data: &AppData) -> StatsResponse {
     const WEEK_COUNT: usize = 8;
-    let today = Local::now().date_naive();
 
     let mut last_7_days = Vec::with_capacity(7);
     for offset in (0..7).rev() {
@@ -963,3 +970,42 @@ const INDEX_HTML: &str = r#"<!DOCTYPE html>
 </body>
 </html>
 "#;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stats_last_7_days_includes_each_day() {
+        let mut data = AppData::default();
+        let today = NaiveDate::from_ymd_opt(2026, 1, 5).unwrap();
+        let two_days_ago = today - Duration::days(2);
+        data.days.insert(
+            date_key(two_days_ago),
+            DayCounts { add: 3, sub: 1 },
+        );
+
+        let stats = build_stats_at(today, &data);
+        assert_eq!(stats.last_7_days.len(), 7);
+        let point = stats
+            .last_7_days
+            .iter()
+            .find(|day| day.date == two_days_ago.to_string())
+            .expect("missing day");
+        assert_eq!(point.add_count, 3);
+        assert_eq!(point.sub_count, 1);
+        assert_eq!(point.net, 2);
+    }
+
+    #[test]
+    fn stats_weekly_series_lengths() {
+        let data = AppData::default();
+        let today = NaiveDate::from_ymd_opt(2026, 1, 5).unwrap();
+        let stats = build_stats_at(today, &data);
+        assert_eq!(stats.weekly_totals.len(), 8);
+        assert_eq!(stats.weekly_averages.len(), 8);
+        assert_eq!(stats.last_7_days.len(), 7);
+    }
+
+    // Functional HTTP tests live in tests/http.rs.
+}
