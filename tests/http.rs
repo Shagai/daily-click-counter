@@ -3,7 +3,7 @@ use reqwest::Client;
 use serde::Deserialize;
 use std::net::TcpListener;
 use std::process::{Child, Command, Stdio};
-use std::sync::{Arc, Weak};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 use tokio::time::sleep;
@@ -28,8 +28,35 @@ impl Drop for TestServer {
     }
 }
 
-static SERVER: Lazy<Mutex<Weak<TestServer>>> = Lazy::new(|| Mutex::new(Weak::new()));
 static TEST_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
+static SERVER: Lazy<Mutex<Option<Arc<TestServer>>>> = Lazy::new(|| Mutex::new(None));
+
+#[cfg(unix)]
+mod cleanup {
+    use std::sync::atomic::{AtomicI32, Ordering};
+    use std::sync::Once;
+
+    static REGISTER: Once = Once::new();
+    static PID: AtomicI32 = AtomicI32::new(0);
+
+    pub fn register(pid: u32) {
+        REGISTER.call_once(|| {
+            PID.store(pid as i32, Ordering::SeqCst);
+            unsafe {
+                libc::atexit(on_exit);
+            }
+        });
+    }
+
+    extern "C" fn on_exit() {
+        let pid = PID.load(Ordering::SeqCst);
+        if pid > 0 {
+            unsafe {
+                libc::kill(pid, libc::SIGTERM);
+            }
+        }
+    }
+}
 
 fn pick_free_port() -> u16 {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind random port");
@@ -76,6 +103,9 @@ async fn spawn_server() -> TestServer {
         .spawn()
         .expect("failed to spawn server");
 
+    #[cfg(unix)]
+    cleanup::register(child.id());
+
     let base_url = format!("http://127.0.0.1:{port}");
     wait_until_ready(&base_url).await;
 
@@ -84,11 +114,11 @@ async fn spawn_server() -> TestServer {
 
 async fn shared_server() -> Arc<TestServer> {
     let mut guard = SERVER.lock().await;
-    if let Some(server) = guard.upgrade() {
-        return server;
+    if let Some(server) = guard.as_ref() {
+        return Arc::clone(server);
     }
     let server = Arc::new(spawn_server().await);
-    *guard = Arc::downgrade(&server);
+    *guard = Some(Arc::clone(&server));
     server
 }
 
