@@ -560,7 +560,7 @@ const INDEX_HTML: &str = r#"<!DOCTYPE html>
     };
 
     const loadToday = async () => {
-      const res = await fetch('/api/today');
+      const res = await fetch('/api/v1/today');
       if (!res.ok) {
         throw new Error('Unable to load today data');
       }
@@ -568,7 +568,7 @@ const INDEX_HTML: &str = r#"<!DOCTYPE html>
     };
 
     const loadStats = async () => {
-      const res = await fetch('/api/stats');
+      const res = await fetch('/api/v1/stats');
       if (!res.ok) {
         throw new Error('Unable to load stats');
       }
@@ -582,7 +582,7 @@ const INDEX_HTML: &str = r#"<!DOCTYPE html>
 
     const send = async (action) => {
       setStatus('Saving...', 'info');
-      const res = await fetch('/api/click', {
+      const res = await fetch('/api/v1/click', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ action })

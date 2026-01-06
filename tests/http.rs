@@ -79,7 +79,7 @@ async fn wait_until_ready(base_url: &str) {
     let client = Client::new();
     let deadline = Instant::now() + Duration::from_secs(3);
     loop {
-        if let Ok(resp) = client.get(format!("{base_url}/api/today")).send().await {
+        if let Ok(resp) = client.get(format!("{base_url}/api/v1/today")).send().await {
             if resp.status().is_success() {
                 return;
             }
@@ -129,7 +129,7 @@ async fn http_click_add_updates_today() {
     let client = Client::new();
 
     let before: DailyCountsResponse = client
-        .get(format!("{}/api/today", server.base_url))
+        .get(format!("{}/api/v1/today", server.base_url))
         .send()
         .await
         .unwrap()
@@ -138,7 +138,7 @@ async fn http_click_add_updates_today() {
         .unwrap();
 
     let response = client
-        .post(format!("{}/api/click", server.base_url))
+        .post(format!("{}/api/v1/click", server.base_url))
         .json(&serde_json::json!({ "action": "add" }))
         .send()
         .await
@@ -146,7 +146,7 @@ async fn http_click_add_updates_today() {
     assert!(response.status().is_success());
 
     let today: DailyCountsResponse = client
-        .get(format!("{}/api/today", server.base_url))
+        .get(format!("{}/api/v1/today", server.base_url))
         .send()
         .await
         .unwrap()
@@ -167,7 +167,7 @@ async fn http_click_sub_updates_today() {
     let client = Client::new();
 
     let before: DailyCountsResponse = client
-        .get(format!("{}/api/today", server.base_url))
+        .get(format!("{}/api/v1/today", server.base_url))
         .send()
         .await
         .unwrap()
@@ -176,7 +176,7 @@ async fn http_click_sub_updates_today() {
         .unwrap();
 
     let response = client
-        .post(format!("{}/api/click", server.base_url))
+        .post(format!("{}/api/v1/click", server.base_url))
         .json(&serde_json::json!({ "action": "sub" }))
         .send()
         .await
@@ -184,7 +184,7 @@ async fn http_click_sub_updates_today() {
     assert!(response.status().is_success());
 
     let today: DailyCountsResponse = client
-        .get(format!("{}/api/today", server.base_url))
+        .get(format!("{}/api/v1/today", server.base_url))
         .send()
         .await
         .unwrap()

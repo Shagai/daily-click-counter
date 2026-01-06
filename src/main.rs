@@ -1,14 +1,3 @@
-mod app;
-mod errors;
-mod handlers;
-mod models;
-mod stats;
-mod storage;
-mod ui;
-mod state;
-
-use crate::state::AppState;
-use crate::storage::{load_data, resolve_data_path};
 use std::{env, net::SocketAddr};
 use tokio::fs;
 use tracing::info;
@@ -20,15 +9,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_env_filter(EnvFilter::from_default_env().add_directive("info".parse()?))
         .init();
 
-    let data_path = resolve_data_path()?;
+    let data_path = web_app::resolve_data_path()?;
     if let Some(parent) = data_path.parent() {
         fs::create_dir_all(parent).await?;
     }
 
-    let data = load_data(&data_path).await;
-    let state = AppState::new(data_path, data);
+    let data = web_app::load_data(&data_path).await;
+    let state = web_app::AppState::new(data_path, data);
 
-    let app = app::router(state);
+    let app = web_app::router(state);
 
     let port = env::var("PORT")
         .ok()
